@@ -1,0 +1,115 @@
+service: kds-lambda-test
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-west-1'}
+  stage: ${opt:stage, 'dev'}
+  environment:
+    NODE_ENV: ${opt:stage, 'dev'}
+
+
+plugins:
+  # - serverless-plugin-typescript
+  - serverless-bundle
+  - serverless-iam-roles-per-function
+  - serverless-offline
+
+custom:
+  common:
+    S3_JSON_DESTINATION_BUCKET_NAME: ${self:service}-bucket
+    S3_JSON_DESTINATION_BUCKET_REGION: ${self:provider.region}
+
+functions:
+  KDSConsumer:
+    handler: src/handler.preprocess
+    # handler: src/handler-dlq.preprocess
+    runtime: nodejs18.x
+    memorySize: 128
+    timeout: 300
+    logRetentionInDays: 1
+    # onError: arn:aws:sns:us-east-1:XXXXXX:test
+    # tracing:
+    #   lambda: true
+    # disableLogs: false
+    environment:
+      S3_JSON_DESTINATION_BUCKET_NAME: ${self:custom.common.S3_JSON_DESTINATION_BUCKET_NAME}
+      S3_JSON_DESTINATION_BUCKET_REGION: ${self:custom.common.S3_JSON_DESTINATION_BUCKET_REGION}
+
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - kinesis:* ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-template-list.html#kinesis-crud-policy
+        Resource:
+          Fn::GetAtt:
+            - DataStream
+            - Arn
+
+      - Effect: Allow
+        Action:
+          - s3:* ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-template-list.html#s3-crud-policy
+        Resource:
+          - Fn::Join:
+              - ""
+              - - Fn::GetAtt: [S3BucketForKinesisDestination, Arn]
+
+          - Fn::Join:
+              - ""
+              - - Fn::GetAtt: [S3BucketForKinesisDestination, Arn]
+                - "/*"
+
+      - Effect: Allow
+        Action:
+          - sqs:* ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-template-list.html#sqs-send-message-policy
+        Resource:
+          Fn::GetAtt:
+            - DataStreamLambdaDLQ
+            - Arn
+    events:
+      - stream:
+          type: kinesis
+          arn:
+            Fn::GetAtt:
+              - DataStream
+              - Arn
+          batchSize: 100
+          batchWindow: 10
+          startingPosition: TRIM_HORIZON
+          maximumRetryAttempts: 2
+          parallelizationFactor: 1
+          maximumRecordAgeInSeconds: 120
+          enabled: true
+          destinations:
+            onFailure:
+              type: sqs
+              arn:
+                Fn::GetAtt:
+                  - DataStreamLambdaDLQ
+                  - Arn
+
+resources:
+  Resources:
+    DataStreamLambdaDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-DLQ
+
+    S3BucketForKinesisDestination:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.common.S3_JSON_DESTINATION_BUCKET_NAME}
+
+    DataStream:
+      Type: AWS::Kinesis::Stream
+      Properties:
+        Name: ${self:service}-kinesis
+        RetentionPeriodHours: 24
+        StreamModeDetails:
+          StreamMode: ON_DEMAND
+        # ShardCount: 3
+        Tags:
+          - Key: Environment
+            Value: ${self:provider.stage}
+          - Key: SLS_Service
+            Value: ${self:service}

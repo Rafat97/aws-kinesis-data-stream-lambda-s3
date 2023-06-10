@@ -1,0 +1,33 @@
+{
+  "name": "aws-kinesis-data-stream-lambda-s3",
+  "version": "0.0.1",
+  "description": "kinesis data stream, lambda and s3",
+  "repository": "https://github.com/Rafat97/aws-kinesis-data-stream-lambda-s3.git",
+  "author": "rafathaque1997@gmail.com",
+  "license": "MIT",
+  "scripts": {
+    "sls": "serverless",
+    "run:producer": "npx ts-node producer.ts",
+    "deploy:dev:us-west-1": "yarn sls deploy --region us-west-1 --stage dev --verbose",
+    "remove:dev:us-west-1": "yarn sls remove --region us-west-1 --stage dev --verbose",
+    "deploy:stage:us-west-1": "yarn sls deploy --region us-west-1 --stage stage --verbose",
+    "remove:stage:us-west-1": "yarn sls remove --region us-west-1 --stage stage --verbose",
+    "deploy:prod:us-west-1": "yarn sls deploy --region us-west-1 --stage production --verbose",
+    "remove:prod:us-west-1": "yarn sls remove --region us-west-1 --stage production --verbose"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.348.0",
+    "@faker-js/faker": "^8.0.2",
+    "@types/aws-lambda": "^8.10.116",
+    "aws-lambda": "^1.0.7",
+    "aws-sdk": "^2.1392.0",
+    "serverless": "^3.32.2",
+    "ulid": "^2.3.0"
+  },
+  "devDependencies": {
+    "serverless-bundle": "^6.0.0",
+    "serverless-iam-roles-per-function": "^3.2.0",
+    "serverless-offline": "^12.0.4",
+    "serverless-plugin-typescript": "^2.1.5"
+  }
+}
